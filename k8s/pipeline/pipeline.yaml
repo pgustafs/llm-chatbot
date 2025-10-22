@@ -1,0 +1,237 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pipeline-workspace-pvc
+  namespace: llm-chatbot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+      
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: llm-chatbot-pipeline
+  namespace: llm-chatbot
+  labels:
+    app: llm-chatbot
+spec:
+  params:
+  - name: git-url
+    type: string
+    description: Git repository URL
+    default: https://github.com/YOUR_ORG/llm-chatbot.git
+  - name: git-revision
+    type: string
+    description: Git revision to checkout
+    default: main
+  - name: image-name
+    type: string
+    description: Container image name
+    default: quay.io/YOUR_QUAY_ORG/llm-chatbot
+  - name: image-tag
+    type: string
+    description: Container image tag
+    default: latest
+  - name: dockerfile-path
+    type: string
+    description: Path to Dockerfile
+    default: ./Dockerfile
+  - name: context-dir
+    type: string
+    description: Build context directory
+    default: .
+    
+  workspaces:
+  - name: source-workspace
+    description: Workspace for source code
+  - name: dockerconfig-secret
+    description: Docker config for authentication
+    
+  tasks:
+  # Task 1: Clone Git repository
+  - name: fetch-source
+    taskRef:
+      resolver: hub
+      params:
+      - name: catalog
+        value: tekton-catalog-tasks
+      - name: type
+        value: artifact
+      - name: kind
+        value: task
+      - name: name
+        value: git-clone
+      - name: version
+        value: "0.9"
+    workspaces:
+    - name: output
+      workspace: source-workspace
+    params:
+    - name: url
+      value: $(params.git-url)
+    - name: revision
+      value: $(params.git-revision)
+    - name: deleteExisting
+      value: "true"
+      
+  # Task 2: Build and Push image with Buildah
+  - name: build-push-image
+    taskRef:
+      resolver: hub
+      params:
+      - name: catalog
+        value: tekton-catalog-tasks
+      - name: type
+        value: artifact
+      - name: kind
+        value: task
+      - name: name
+        value: buildah
+      - name: version
+        value: "0.8"
+    runAfter:
+    - fetch-source
+    workspaces:
+    - name: source
+      workspace: source-workspace
+    - name: dockerconfig
+      workspace: dockerconfig-secret
+    params:
+    - name: IMAGE
+      value: "$(params.image-name):$(params.image-tag)"
+    - name: DOCKERFILE
+      value: $(params.dockerfile-path)
+    - name: CONTEXT
+      value: $(params.context-dir)
+    - name: TLSVERIFY
+      value: "true"
+    - name: FORMAT
+      value: "oci"
+      
+  # Task 3: Update deployment using OpenShift Client
+  - name: apply-manifests
+    taskRef:
+      resolver: cluster
+      params:
+      - name: kind
+        value: task
+      - name: name
+        value: openshift-client
+      - name: namespace
+        value: openshift-pipelines
+    runAfter:
+    - build-push-image
+    params:
+    - name: SCRIPT
+      value: |
+        oc apply -f $(workspaces.manifest-dir.path)/k8s/deployment.yaml
+        oc rollout status deployment/llm-chatbot -n llm-chatbot --timeout=5m
+    workspaces:
+    - name: manifest-dir
+      workspace: source-workspace
+      
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: llm-chatbot-trigger-template
+  namespace: llm-chatbot
+spec:
+  params:
+  - name: git-url
+    description: The git repository URL
+  - name: git-revision
+    description: The git revision
+    default: main
+  - name: image-tag
+    description: Image tag from commit SHA
+  resourcetemplates:
+  - apiVersion: tekton.dev/v1
+    kind: PipelineRun
+    metadata:
+      generateName: llm-chatbot-run-
+      namespace: llm-chatbot
+    spec:
+      pipelineRef:
+        name: llm-chatbot-pipeline
+      params:
+      - name: git-url
+        value: $(tt.params.git-url)
+      - name: git-revision
+        value: $(tt.params.git-revision)
+      - name: image-tag
+        value: $(tt.params.image-tag)
+      workspaces:
+      - name: source-workspace
+        persistentVolumeClaim:
+          claimName: pipeline-workspace-pvc
+      - name: dockerconfig-secret
+        secret:
+          secretName: quay-auth-secret
+      serviceAccountName: pipeline
+      
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: llm-chatbot-trigger-binding
+  namespace: llm-chatbot
+spec:
+  params:
+  - name: git-url
+    value: $(body.repository.url)
+  - name: git-revision
+    value: $(body.ref)
+  - name: image-tag
+    value: $(body.head_commit.id)
+    
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: llm-chatbot-listener
+  namespace: llm-chatbot
+spec:
+  serviceAccountName: pipeline
+  triggers:
+  - name: github-push
+    interceptors:
+    - ref:
+        name: "github"
+      params:
+      - name: "secretRef"
+        value:
+          secretName: github-webhook-secret
+          secretKey: secret
+      - name: "eventTypes"
+        value: ["push"]
+    bindings:
+    - ref: llm-chatbot-trigger-binding
+    template:
+      ref: llm-chatbot-trigger-template
+      
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: llm-chatbot-webhook
+  namespace: llm-chatbot
+  labels:
+    app: llm-chatbot
+    app.kubernetes.io/component: webhook
+spec:
+  to:
+    kind: Service
+    name: el-llm-chatbot-listener
+    weight: 100
+  port:
+    targetPort: http-listener
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
