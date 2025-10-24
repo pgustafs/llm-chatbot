@@ -1,6 +1,6 @@
 # LLM Chatbot - OpenShift CI/CD Deployment
 
-Complete deployment guide for Streamlit LLM Chatbot on OpenShift 4.19 with Tekton CI/CD pipeline.
+Complete deployment guide for Streamlit LLM Chatbot on OpenShift 4.19 with Tekton CI/CD pipeline..
 
 ## 📋 Table of Contents
 
