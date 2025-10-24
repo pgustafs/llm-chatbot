@@ -188,7 +188,7 @@ metadata:
 spec:
   params:
   - name: git-url
-    value: $(body.repository.url)
+    value: $(body.repository.clone_url)
   - name: git-revision
     value: $(body.ref)
   - name: image-tag
