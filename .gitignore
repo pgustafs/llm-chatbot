@@ -46,7 +46,6 @@ env/
 .kube/
 
 # Secrets - NEVER commit these
-*secret*.yaml
 *credentials*.json
 quay-robot-secret.yaml
 *.pem

@@ -129,11 +129,15 @@ spec:
     params:
     - name: SCRIPT
       value: |
-        oc apply -f $(workspaces.manifest-dir.path)/k8s/deployment.yaml
+        # Update the deployment with new image
+        oc set image deployment/llm-chatbot \
+          llm-chatbot=$(params.image-name):$(params.image-tag) \
+          -n llm-chatbot
+        
+        # Wait for rollout to complete
         oc rollout status deployment/llm-chatbot -n llm-chatbot --timeout=5m
-    workspaces:
-    - name: manifest-dir
-      workspace: source-workspace
+        
+        echo "Deployment updated successfully with image: $(params.image-name):$(params.image-tag)"
       
 ---
 apiVersion: triggers.tekton.dev/v1beta1
