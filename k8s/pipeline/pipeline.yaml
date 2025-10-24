@@ -24,7 +24,7 @@ spec:
   - name: git-url
     type: string
     description: Git repository URL
-    default: https://github.com/YOUR_ORG/llm-chatbot.git
+    default: https://github.com/pgustafs/llm-chatbot.git
   - name: git-revision
     type: string
     description: Git revision to checkout
@@ -32,7 +32,7 @@ spec:
   - name: image-name
     type: string
     description: Container image name
-    default: quay.io/YOUR_QUAY_ORG/llm-chatbot
+    default: quay.io/pgustafs/llm-chatbot
   - name: image-tag
     type: string
     description: Container image tag
@@ -168,6 +168,8 @@ spec:
         value: $(tt.params.git-url)
       - name: git-revision
         value: $(tt.params.git-revision)
+      - name: image-name
+        value: quay.io/pgustafs/llm-chatbot
       - name: image-tag
         value: $(tt.params.image-tag)
       workspaces:
