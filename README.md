@@ -243,6 +243,12 @@ oc create secret generic github-webhook-secret \
 
 # Save this secret - you'll need it for GitHub webhook configuration
 echo "Your webhook secret: ${WEBHOOK_SECRET}"
+
+# Verify secret creation
+oc get secret github-webhook-secret -n llm-chatbot
+
+# Verify the secret value
+oc get secret github-webhook-secret -n llm-chatbot -o jsonpath='{.data.secret}' | base64 -d
 ```
 
 ## 🔧 Tekton Pipeline Setup
@@ -313,6 +319,14 @@ echo "Webhook URL: https://${WEBHOOK_URL}"
    - **Active**: Check the box
 4. Click **Add webhook**
 5. Test webhook by pushing a commit
+
+```bash
+# 1. Check if PipelineRuns are being created
+oc get pipelineruns -n llm-chatbot --sort-by=.metadata.creationTimestamp
+
+# 2. Check for errors in EventListener
+oc logs -n llm-chatbot -l eventlistener=llm-chatbot-listener --tail=100
+```
 
 ## 📦 Manual Deployment
 

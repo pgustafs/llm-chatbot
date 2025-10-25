@@ -36,7 +36,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: llm-chatbot
-        image: quay.io/YOUR_QUAY_ORG/llm-chatbot:latest
+        image: quay.io/pgustafs/llm-chatbot:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8501
