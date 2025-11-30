@@ -326,6 +326,14 @@ oc get pipelineruns -n llm-chatbot --sort-by=.metadata.creationTimestamp
 
 # 2. Check for errors in EventListener
 oc logs -n llm-chatbot -l eventlistener=llm-chatbot-listener --tail=100
+
+# or using tkn
+
+# 1. Watch pipeline execution (tasks will be resolved automatically)
+tkn pipelinerun logs -f -n llm-chatbot
+
+# 2. Check pipeline status
+tkn pipelinerun list -n llm-chatbot
 ```
 
 ## 📦 Manual Deployment
